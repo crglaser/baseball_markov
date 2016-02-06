@@ -3,7 +3,7 @@ import random
 import csv
 import pandas as pd
 import numpy as np
-import time
+
 
 transitions_made = {}
 base_states = ["000", "100", "020", "120", "003", "103", "023", "123"]
@@ -11,7 +11,8 @@ runners = [0, 1, 1, 2, 1, 2, 2, 3]
 
 num_base_states = len(base_states)
 
-class TransitonStates:
+
+class TransitionStates:
     def __init__(self, states, row_length):
         self.transition_states = []
         row_element = 0
@@ -30,6 +31,7 @@ class TransitonStates:
     def print_states(self):
         for i in self.transition_states:
             print(i)
+
 
 class Node:
     def __init__(self, base_state_number, outs, transition_states):
@@ -62,28 +64,10 @@ class Node:
 
 
 class Inning:
-    nodes = []
-    states = []
-
-    def __init__(self, df, do_print = True):
+    def __init__(self, environment, do_print=True):
+        self.environment = environment
+        self.active_node = environment.nodes[0][0]
         self.do_print = do_print
-        for row in df:
-            ts = TransitonStates(row,num_base_states)
-            self.states.append(ts.transition_states)
-        self.create_nodes()
-        self.active_node = self.nodes[0][0]
-
-    #Move creation of nodes out of Inning object
-    def create_nodes(self):
-        for outs in range(0, 3):
-            out_nodes = []
-            for state in range(0,num_base_states):
-                out_nodes.append(Node(state, outs, self.states[outs*8 + state]))
-            self.nodes.append(out_nodes)
-        three_out_nodes = []
-        for state in range(0,4):
-            three_out_nodes.append(Node(state, 3, self.states[0]))
-        self.nodes.append(three_out_nodes)
 
     def iterate(self, at_bat_of_inning, do_print):
         beginning_node = self.active_node
@@ -93,7 +77,7 @@ class Inning:
         next_row = next_node[0]
         next_col = next_node[1]
 
-        self.active_node = self.nodes[next_row][next_col]
+        self.active_node = environment.nodes[next_row][next_col]
 
         key = str(beginning_node.node_number()) + " " + str(self.active_node.node_number())
         if transitions_made.has_key(key):
@@ -119,6 +103,7 @@ class Inning:
         return current_node.outs + current_node.num_runners
 
     def simulate_inning(self):
+        self.active_node = self.environment.nodes[0][0]
         inning_runs_scored = 0
         at_bat_of_inning = 1
         if self.do_print:
@@ -133,17 +118,50 @@ class Inning:
 
         return inning_runs_scored
 
-#Fix this so it uses the csv in the project by relative path
-x = np.loadtxt('C:\\Data\\transitions_2013.csv', delimiter=",")
 
-num_innings = 10000
+class Environment:
+    nodes = []
+    states = []
+
+    def __init__(self, transitions):
+        for row in transitions:
+            ts = TransitionStates(row, num_base_states)
+            self.states.append(ts.transition_states)
+        self.create_nodes()
+
+    def create_nodes(self):
+        for outs in range(0, 3):
+            out_nodes = []
+            for state in range(0,num_base_states):
+                out_nodes.append(Node(state, outs, self.states[outs*8 + state]))
+            self.nodes.append(out_nodes)
+        three_out_nodes = []
+        for state in range(0,4):
+            three_out_nodes.append(Node(state, 3, self.states[0]))
+        self.nodes.append(three_out_nodes)
+
+file_transitions = np.loadtxt('..\\data\\transitions_2013.csv', delimiter=",")
+
+num_innings = 9
 total_runs = 0.0
+runs_each_inning = []
+innings = []
+environment = Environment(file_transitions)
+
 for curr_inning in range(0,num_innings):
+    inning = Inning(environment, False)
     print(curr_inning)
-    test = Inning(x, False)
-    total_runs += test.simulate_inning()
+    runs_this_inning = inning.simulate_inning()
+    total_runs += runs_this_inning
+    innings.append(curr_inning+1)
+    runs_each_inning.append(runs_this_inning)
+
+innings.append("R")
+runs_each_inning.append(sum(runs_each_inning))
 
 print("average runs ", total_runs/num_innings)
+print(innings)
+print(runs_each_inning)
 #for key in transitions_made:
 #    print(key, transitions_made[key])
 
