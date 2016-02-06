@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 import time
 
+transitions_made = {}
 base_states = ["000", "100", "020", "120", "003", "103", "023", "123"]
 runners = [0, 1, 1, 2, 1, 2, 2, 3]
 
@@ -31,12 +32,16 @@ class TransitonStates:
             print(i)
 
 class Node:
-    def __init__(self, base_state, num_runners, outs, transition_states, three_out_runs = 0):
-        self.base_state = base_state
-        self.num_runners = num_runners
+    def __init__(self, base_state_number, outs, transition_states):
+        self.base_state_number = base_state_number
+        self.base_state = base_states[base_state_number]
+        self.num_runners = runners[base_state_number]
         self.outs = outs
         self.transition_states = transition_states
-        self.three_out_runs = three_out_runs
+        self.three_out_runs = base_state_number
+
+    def node_number(self):
+        return self.outs*8 + self.base_state_number
 
     def print_node(self, at_bat_number, runs_scored = 0):
         print("At Bat: ", at_bat_number, "base state: ", self.base_state, " num_runners: ", self.num_runners, " outs: ", self.outs)
@@ -68,15 +73,16 @@ class Inning:
         self.create_nodes()
         self.active_node = self.nodes[0][0]
 
+    #Move creation of nodes out of Inning object
     def create_nodes(self):
         for outs in range(0, 3):
             out_nodes = []
             for state in range(0,num_base_states):
-                out_nodes.append(Node(base_states[state], runners[state], outs, self.states[outs*8 + state]))
+                out_nodes.append(Node(state, outs, self.states[outs*8 + state]))
             self.nodes.append(out_nodes)
         three_out_nodes = []
         for state in range(0,4):
-            three_out_nodes.append(Node(base_states[0], runners[0], 3, self.states[0], three_out_runs=state))
+            three_out_nodes.append(Node(state, 3, self.states[0]))
         self.nodes.append(three_out_nodes)
 
     def iterate(self, at_bat_of_inning, do_print):
@@ -88,6 +94,12 @@ class Inning:
         next_col = next_node[1]
 
         self.active_node = self.nodes[next_row][next_col]
+
+        key = str(beginning_node.node_number()) + " " + str(self.active_node.node_number())
+        if transitions_made.has_key(key):
+            transitions_made[key] += 1
+        else:
+            transitions_made[key] = 1
 
         start_runners_and_outs = self.runners_and_outs(beginning_node)
         end_runners_and_outs = self.runners_and_outs(self.active_node)
@@ -121,17 +133,19 @@ class Inning:
 
         return inning_runs_scored
 
+#Fix this so it uses the csv in the project by relative path
+x = np.loadtxt('C:\\Data\\transitions_2013.csv', delimiter=",")
 
-x = np.loadtxt('C:\\Data\\transitions_2014.csv', delimiter=",", skiprows=1)
-
-num_innings = 1
+num_innings = 10000
 total_runs = 0.0
 for curr_inning in range(0,num_innings):
     print(curr_inning)
-    test = Inning(x, True)
+    test = Inning(x, False)
     total_runs += test.simulate_inning()
 
 print("average runs ", total_runs/num_innings)
+#for key in transitions_made:
+#    print(key, transitions_made[key])
 
 
 
