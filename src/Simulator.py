@@ -45,8 +45,8 @@ class Node:
     def node_number(self):
         return self.outs*8 + self.base_state_number
 
-    def print_node(self, at_bat_number, runs_scored = 0):
-        print("At Bat: ", at_bat_number, "base state: ", self.base_state, " num_runners: ", self.num_runners, " outs: ", self.outs)
+    def print_node(self, at_bat_number, runs_scored = 0, lineup_spot = 1):
+        print("Lineup Spot:", lineup_spot, " Inning At Bat: ", at_bat_number + 1, "base state: ", self.base_state, " num_runners: ", self.num_runners, " outs: ", self.outs)
         if runs_scored > 0:
             print("Runs Scored: ", runs_scored)
 
@@ -64,12 +64,12 @@ class Node:
 
 
 class Inning:
-    def __init__(self, environment, do_print=True):
-        self.environment = environment
-        self.active_node = environment.nodes[0][0]
+    def __init__(self, lineup, do_print=True):
+        self.lineup = lineup
+        self.active_node = lineup.lineup_spot().nodes[0][0]
         self.do_print = do_print
 
-    def iterate(self, at_bat_of_inning, do_print):
+    def iterate_inning(self, at_bat_of_inning, do_print):
         beginning_node = self.active_node
 
         next_node = self.active_node.next_node()
@@ -77,7 +77,8 @@ class Inning:
         next_row = next_node[0]
         next_col = next_node[1]
 
-        self.active_node = environment.nodes[next_row][next_col]
+        self.active_node = self.lineup.lineup_spot().nodes[next_row][next_col]
+        self.lineup.iterate_lineup()
 
         key = str(beginning_node.node_number()) + " " + str(self.active_node.node_number())
         if transitions_made.has_key(key):
@@ -95,7 +96,7 @@ class Inning:
             runs_scored = start_runners_and_outs + 1 - end_runners_and_outs
 
         if do_print:
-            self.active_node.print_node(at_bat_of_inning, runs_scored)
+            self.active_node.print_node(at_bat_of_inning, runs_scored, lineup_spot=self.lineup.current_spot + 1)
 
         return runs_scored
 
@@ -103,15 +104,18 @@ class Inning:
         return current_node.outs + current_node.num_runners
 
     def simulate_inning(self):
-        self.active_node = self.environment.nodes[0][0]
+        self.active_node = self.lineup.lineup_spot().nodes[0][0]
         inning_runs_scored = 0
         at_bat_of_inning = 1
+
         if self.do_print:
-            self.active_node.print_node(0)
+            self.active_node.print_node(0,lineup_spot=self.lineup.current_spot+1)
 
         while self.active_node.outs != 3:
-            inning_runs_scored += self.iterate(at_bat_of_inning, self.do_print)
+            inning_runs_scored += self.iterate_inning(at_bat_of_inning, self.do_print)
             at_bat_of_inning += 1
+
+        self.lineup.iterate_lineup()
 
         if self.do_print:
             print("Total runs in inning: ", inning_runs_scored)
@@ -119,7 +123,22 @@ class Inning:
         return inning_runs_scored
 
 
-class Environment:
+class Lineup:
+    def __init__(self, lineup_spots):
+        self.lineup_spots = lineup_spots
+        self.num_spots = len(lineup_spots)
+        self.current_spot = 0
+
+    def lineup_spot(self):
+        return self.lineup_spots[self.current_spot]
+
+    def iterate_lineup(self):
+        self.current_spot += 1
+        if self.current_spot == self.num_spots:
+            self.current_spot = 0
+
+
+class LineupSpot:
     nodes = []
     states = []
 
@@ -153,22 +172,62 @@ def counts_to_probabilities(transition_counts):
 
 file_transitions = np.loadtxt('..\\data\\transitions_2013.csv', delimiter=",")
 transitions_raw_ls_1 = np.loadtxt('..\\data\\transitions_raw_ls_1.csv', delimiter=",")
+transitions_raw_ls_2 = np.loadtxt('..\\data\\transitions_raw_ls_2.csv', delimiter=",")
+transitions_raw_ls_3 = np.loadtxt('..\\data\\transitions_raw_ls_3.csv', delimiter=",")
+transitions_raw_ls_4 = np.loadtxt('..\\data\\transitions_raw_ls_4.csv', delimiter=",")
+transitions_raw_ls_5 = np.loadtxt('..\\data\\transitions_raw_ls_5.csv', delimiter=",")
+transitions_raw_ls_6 = np.loadtxt('..\\data\\transitions_raw_ls_6.csv', delimiter=",")
+transitions_raw_ls_7 = np.loadtxt('..\\data\\transitions_raw_ls_7.csv', delimiter=",")
+transitions_raw_ls_8 = np.loadtxt('..\\data\\transitions_raw_ls_8.csv', delimiter=",")
+transitions_raw_ls_9 = np.loadtxt('..\\data\\transitions_raw_ls_9.csv', delimiter=",")
 
 transitions_ls_1 = counts_to_probabilities(transitions_raw_ls_1)
+transitions_ls_2 = counts_to_probabilities(transitions_raw_ls_2)
+transitions_ls_3 = counts_to_probabilities(transitions_raw_ls_3)
+transitions_ls_4 = counts_to_probabilities(transitions_raw_ls_4)
+transitions_ls_5 = counts_to_probabilities(transitions_raw_ls_5)
+transitions_ls_6 = counts_to_probabilities(transitions_raw_ls_6)
+transitions_ls_7 = counts_to_probabilities(transitions_raw_ls_7)
+transitions_ls_8 = counts_to_probabilities(transitions_raw_ls_8)
+transitions_ls_9 = counts_to_probabilities(transitions_raw_ls_9)
 
 print_box_score = False
-print_transitions_made = False
+print_transitions = True
+print_transitions_count = False
 print_inning_number = True
-num_innings = 9000
+num_innings = 9
 total_runs = 0.0
 runs_each_inning = []
 innings = []
-environment = Environment(transitions_ls_1)
+
+lineup_spots = []
+
+lineup_spot_1 = LineupSpot(transitions_ls_1)
+lineup_spot_2 = LineupSpot(transitions_ls_2)
+lineup_spot_3 = LineupSpot(transitions_ls_3)
+lineup_spot_4 = LineupSpot(transitions_ls_4)
+lineup_spot_5 = LineupSpot(transitions_ls_5)
+lineup_spot_6 = LineupSpot(transitions_ls_6)
+lineup_spot_7 = LineupSpot(transitions_ls_7)
+lineup_spot_8 = LineupSpot(transitions_ls_8)
+lineup_spot_9 = LineupSpot(transitions_ls_9)
+
+lineup_spots.append(lineup_spot_1)
+lineup_spots.append(lineup_spot_2)
+lineup_spots.append(lineup_spot_3)
+lineup_spots.append(lineup_spot_4)
+lineup_spots.append(lineup_spot_5)
+lineup_spots.append(lineup_spot_6)
+lineup_spots.append(lineup_spot_7)
+lineup_spots.append(lineup_spot_8)
+lineup_spots.append(lineup_spot_9)
+
+lineup = Lineup(lineup_spots)
 
 for curr_inning in range(1,num_innings+1):
-    inning = Inning(environment, False)
+    inning = Inning(lineup, print_transitions)
     if print_inning_number:
-        print(curr_inning)
+        print("Inning #: ", curr_inning)
     runs_this_inning = inning.simulate_inning()
     total_runs += runs_this_inning
     innings.append(curr_inning)
@@ -182,7 +241,7 @@ if print_box_score:
     print(innings)
     print(runs_each_inning)
 
-if print_transitions_made:
+if print_transitions_count:
     for key in transitions_made:
         print(key, transitions_made[key])
 
