@@ -140,30 +140,51 @@ class Environment:
             three_out_nodes.append(Node(state, 3, self.states[0]))
         self.nodes.append(three_out_nodes)
 
-file_transitions = np.loadtxt('..\\data\\transitions_2013.csv', delimiter=",")
 
-num_innings = 9
+def count_to_prob(row):
+    total = row.sum()
+    new_row = [a/total for a in row]
+    return new_row
+
+
+def counts_to_probabilities(transition_counts):
+    perc = np.apply_along_axis(count_to_prob, axis=1, arr=transition_counts)
+    return perc
+
+file_transitions = np.loadtxt('..\\data\\transitions_2013.csv', delimiter=",")
+transitions_raw_ls_1 = np.loadtxt('..\\data\\transitions_raw_ls_1.csv', delimiter=",")
+
+transitions_ls_1 = counts_to_probabilities(transitions_raw_ls_1)
+
+print_box_score = False
+print_transitions_made = False
+print_inning_number = True
+num_innings = 9000
 total_runs = 0.0
 runs_each_inning = []
 innings = []
-environment = Environment(file_transitions)
+environment = Environment(transitions_ls_1)
 
-for curr_inning in range(0,num_innings):
+for curr_inning in range(1,num_innings+1):
     inning = Inning(environment, False)
-    print(curr_inning)
+    if print_inning_number:
+        print(curr_inning)
     runs_this_inning = inning.simulate_inning()
     total_runs += runs_this_inning
-    innings.append(curr_inning+1)
+    innings.append(curr_inning)
     runs_each_inning.append(runs_this_inning)
 
 innings.append("R")
 runs_each_inning.append(sum(runs_each_inning))
 
 print("average runs ", total_runs/num_innings)
-print(innings)
-print(runs_each_inning)
-#for key in transitions_made:
-#    print(key, transitions_made[key])
+if print_box_score:
+    print(innings)
+    print(runs_each_inning)
+
+if print_transitions_made:
+    for key in transitions_made:
+        print(key, transitions_made[key])
 
 
 
