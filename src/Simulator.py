@@ -34,12 +34,13 @@ class TransitionStates:
 
 
 class Node:
-    def __init__(self, base_state_number, outs, transition_states):
+    def __init__(self, base_state_number, outs, transition_states, transition_states_non_pa):
         self.base_state_number = base_state_number
         self.base_state = base_states[base_state_number]
         self.num_runners = runners[base_state_number]
         self.outs = outs
         self.transition_states = transition_states
+        self.transition_states_non_pa = transition_states_non_pa
         self.three_out_runs = base_state_number
 
     def node_number(self):
@@ -48,13 +49,28 @@ class Node:
     def print_start_node(self):
         print("Start of inning", "base state", self.base_state, "num_runners", self.num_runners, "outs", self.outs)
 
-    def print_node(self, at_bat_number, runs_scored=0, lineup_spot=1):
-        print("Lineup Spot:", lineup_spot + 1, " Inning At Bat: ", at_bat_number + 1, "base state: ", self.base_state, " num_runners: ", self.num_runners, " outs: ", self.outs)
+    def print_node(self, at_bat_number, runs_scored=0, lineup_spot=1, non_pa_transition=False):
+        pa_trans = "PA Transition"
+        if non_pa_transition:
+            pa_trans = "Non-Pa Transition"
+        print(pa_trans,"Lineup Spot:", lineup_spot + 1, " Inning At Bat: ", at_bat_number + 1, "base state: ", self.base_state, " num_runners: ", self.num_runners, " outs: ", self.outs)
         if runs_scored > 0:
             print("Runs Scored: ", runs_scored)
 
     def print_first_transition_state(self):
         print(self.transition_states[0][0])
+
+    def next_non_pa_node(self):
+        r = random.random()
+        row = 0
+        for i in self.transition_states_non_pa:
+            col = 0
+            for j in i:
+                if r < self.transition_states_non_pa[row][col]:
+                    return (row,col)
+                else:
+                    col += 1
+            row += 1
 
     def next_node(self):
         r = random.random()
@@ -68,15 +84,40 @@ class Node:
                     col += 1
             row += 1
 
-
 class Inning:
-    def __init__(self, lineup, do_print=True):
+    def __init__(self, lineup, do_print=True, include_non_pa_transitions=True):
         self.lineup = lineup
         self.active_node = lineup.current_lineup_spot().nodes[0][0]
         self.do_print = do_print
+        self.include_non_pa_transitions = include_non_pa_transitions
+
+    def non_pa_transition(self, beginning_node, at_bat_of_inning, do_print):
+        next_node = self.active_node.next_non_pa_node()
+        next_row = next_node[0]
+        next_col = next_node[1]
+
+        self.active_node = self.lineup.current_lineup_spot().nodes[next_row][next_col]
+
+        start_runners_and_outs = self.runners_and_outs(beginning_node)
+        end_runners_and_outs = self.runners_and_outs(self.active_node)
+
+        runs_scored = 0
+        if self.active_node.outs == 3:
+            runs_scored = self.active_node.three_out_runs
+        elif end_runners_and_outs < start_runners_and_outs:
+            runs_scored = start_runners_and_outs - end_runners_and_outs
+
+        if do_print and beginning_node.node_number() != self.active_node.node_number():
+            self.active_node.print_node(at_bat_of_inning, runs_scored, lineup_spot=self.lineup.current_spot, non_pa_transition=True)
+
+        return runs_scored
 
     def iterate_inning(self, at_bat_of_inning, do_print):
         beginning_node = self.active_node
+
+        non_pa_runs = 0
+        if include_non_pa_transitions:
+            non_pa_runs = self.non_pa_transition(beginning_node, at_bat_of_inning, do_print)
 
         next_node = self.active_node.next_node()
 
@@ -103,7 +144,7 @@ class Inning:
         if do_print:
             self.active_node.print_node(at_bat_of_inning, runs_scored, lineup_spot=self.lineup.current_spot)
 
-        return runs_scored
+        return runs_scored + non_pa_runs
 
     def runners_and_outs(self, current_node):
         return current_node.outs + current_node.num_runners
@@ -148,13 +189,22 @@ class Lineup:
 
 
 class LineupSpot:
-    def __init__(self, raw_transitions):
+    # Add a 2nd (non-PA change) transitions file, set this one as PA transitions file?
+    def __init__(self, raw_transitions_pa, raw_transitions_non_pa):
         self.nodes = []
         self.states = []
-        for row in raw_transitions:
+        self.states_non_pa = []
+
+        for row in raw_transitions_pa:
             prob_row = self.count_to_prob(row)
             ts = TransitionStates(prob_row, num_base_states)
             self.states.append(ts.transition_states)
+
+        for row in raw_transitions_non_pa:
+            prob_row = self.count_to_prob(row)
+            ts = TransitionStates(prob_row, num_base_states)
+            self.states_non_pa.append(ts.transition_states)
+
         self.create_nodes()
 
     def count_to_prob(self,row):
@@ -166,11 +216,11 @@ class LineupSpot:
         for outs in range(0, 3):
             out_nodes = []
             for state in range(0,num_base_states):
-                out_nodes.append(Node(state, outs, self.states[outs*8 + state]))
+                out_nodes.append(Node(state, outs, self.states[outs*8 + state], self.states_non_pa[outs*8 + state]))
             self.nodes.append(out_nodes)
         three_out_nodes = []
         for state in range(0,4):
-            three_out_nodes.append(Node(state, 3, self.states[0]))
+            three_out_nodes.append(Node(state, 3, self.states[0], self.states_non_pa[0]))
         self.nodes.append(three_out_nodes)
 
     def print_first_transition(self):
@@ -178,29 +228,41 @@ class LineupSpot:
 
 
 print_box_score = False
-print_transitions = True
+print_transitions = False
 print_transitions_count = False
 print_inning_number = True
-num_innings = 9
+include_non_pa_transitions = True
+num_innings = 100000
 total_runs = 0.0
 runs_each_inning = []
 innings = []
 
+non_pa_transitions_1 = np.loadtxt('..\\data\\non_pa_transitions_raw_ls_1.csv', delimiter=",")
+
 lineup_spots = []
-lineup_spots.append(LineupSpot(np.loadtxt('..\\data\\transitions_raw_ls_1.csv', delimiter=",")))
-lineup_spots.append(LineupSpot(np.loadtxt('..\\data\\transitions_raw_ls_2.csv', delimiter=",")))
-lineup_spots.append(LineupSpot(np.loadtxt('..\\data\\transitions_raw_ls_3.csv', delimiter=",")))
-lineup_spots.append(LineupSpot(np.loadtxt('..\\data\\transitions_raw_ls_4.csv', delimiter=",")))
-lineup_spots.append(LineupSpot(np.loadtxt('..\\data\\transitions_raw_ls_5.csv', delimiter=",")))
-lineup_spots.append(LineupSpot(np.loadtxt('..\\data\\transitions_raw_ls_6.csv', delimiter=",")))
-lineup_spots.append(LineupSpot(np.loadtxt('..\\data\\transitions_raw_ls_7.csv', delimiter=",")))
-lineup_spots.append(LineupSpot(np.loadtxt('..\\data\\transitions_raw_ls_8.csv', delimiter=",")))
-lineup_spots.append(LineupSpot(np.loadtxt('..\\data\\transitions_raw_ls_9.csv', delimiter=",")))
+lineup_spots.append(LineupSpot(np.loadtxt('..\\data\\transitions_raw_ls_1.csv', delimiter=","),
+                               np.loadtxt('..\\data\\non_pa_transitions_raw_ls_1.csv', delimiter=",")))
+lineup_spots.append(LineupSpot(np.loadtxt('..\\data\\transitions_raw_ls_2.csv', delimiter=","),
+                               np.loadtxt('..\\data\\non_pa_transitions_raw_ls_2.csv', delimiter=",")))
+lineup_spots.append(LineupSpot(np.loadtxt('..\\data\\transitions_raw_ls_3.csv', delimiter=","),
+                               np.loadtxt('..\\data\\non_pa_transitions_raw_ls_3.csv', delimiter=",")))
+lineup_spots.append(LineupSpot(np.loadtxt('..\\data\\transitions_raw_ls_4.csv', delimiter=","),
+                               np.loadtxt('..\\data\\non_pa_transitions_raw_ls_4.csv', delimiter=",")))
+lineup_spots.append(LineupSpot(np.loadtxt('..\\data\\transitions_raw_ls_5.csv', delimiter=","),
+                               np.loadtxt('..\\data\\non_pa_transitions_raw_ls_5.csv', delimiter=",")))
+lineup_spots.append(LineupSpot(np.loadtxt('..\\data\\transitions_raw_ls_6.csv', delimiter=","),
+                               np.loadtxt('..\\data\\non_pa_transitions_raw_ls_6.csv', delimiter=",")))
+lineup_spots.append(LineupSpot(np.loadtxt('..\\data\\transitions_raw_ls_7.csv', delimiter=","),
+                               np.loadtxt('..\\data\\non_pa_transitions_raw_ls_7.csv', delimiter=",")))
+lineup_spots.append(LineupSpot(np.loadtxt('..\\data\\transitions_raw_ls_8.csv', delimiter=","),
+                               np.loadtxt('..\\data\\non_pa_transitions_raw_ls_8.csv', delimiter=",")))
+lineup_spots.append(LineupSpot(np.loadtxt('..\\data\\transitions_raw_ls_9.csv', delimiter=","),
+                               np.loadtxt('..\\data\\non_pa_transitions_raw_ls_9.csv', delimiter=",")))
 
 lineup = Lineup(lineup_spots)
 
 for curr_inning in range(1,num_innings+1):
-    inning = Inning(lineup, print_transitions)
+    inning = Inning(lineup, print_transitions, include_non_pa_transitions=include_non_pa_transitions)
     if print_inning_number:
         print("Inning #: ", curr_inning)
     runs_this_inning = inning.simulate_inning()
