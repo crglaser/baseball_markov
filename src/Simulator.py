@@ -8,12 +8,16 @@ import numpy as np
 transitions_made = {}
 base_states = ["000", "100", "020", "120", "003", "103", "023", "123"]
 runners = [0, 1, 1, 2, 1, 2, 2, 3]
+num_start_states = 24
+num_end_states = 28
+num_lineup_spots = 9
 
 num_base_states = len(base_states)
 
 
 class TransitionStates:
     def __init__(self, states, row_length):
+        #print(states)
         self.transition_states = []
         row_element = 0
         running_probability = 0
@@ -26,6 +30,7 @@ class TransitionStates:
                 self.transition_states.append(current_row)
                 current_row = []
                 row_element = 0
+        #print(current_row)
         self.transition_states.append(current_row)
 
     def states(self):
@@ -78,6 +83,7 @@ class Node:
         for i in self.transition_states:
             col = 0
             for j in i:
+                #print(row, col, r, self.transition_states)
                 if r < self.transition_states[row][col]:
                     return (row,col)
                 else:
@@ -117,7 +123,11 @@ class Inning:
 
         non_pa_runs = 0
         if include_non_pa_transitions:
+            #should be a loop since multiple non-pa transitions can happen here
             non_pa_runs = self.non_pa_transition(beginning_node, at_bat_of_inning, do_print)
+
+        if self.active_node.outs == 3:
+            return non_pa_runs
 
         next_node = self.active_node.next_node()
 
@@ -189,15 +199,17 @@ class Lineup:
 
 
 class LineupSpot:
-    # Add a 2nd (non-PA change) transitions file, set this one as PA transitions file?
     def __init__(self, raw_transitions_pa, raw_transitions_non_pa):
         self.nodes = []
         self.states = []
         self.states_non_pa = []
 
+        #print(type(raw_transitions_non_pa))
         for row in raw_transitions_pa:
+            #print(row)
             prob_row = self.count_to_prob(row)
             ts = TransitionStates(prob_row, num_base_states)
+            #print(ts)
             self.states.append(ts.transition_states)
 
         for row in raw_transitions_non_pa:
@@ -208,8 +220,11 @@ class LineupSpot:
         self.create_nodes()
 
     def count_to_prob(self,row):
-        total = row.sum()
+        #print(row, type(row))
+        total = float(sum(row))
+        #print(total)
         new_row = [a/total for a in row]
+        #print(new_row)
         return new_row
 
     def create_nodes(self):
@@ -227,39 +242,42 @@ class LineupSpot:
         print(self.nodes[0][0].print_first_transition_state())
 
 
+def make_lineup(pa_transitions, non_pa_transitions):
+    constructed_lineup = []
+    for lineup_spot in range(1, num_lineup_spots+1):
+        final_pa_transitions = []
+        final_non_pa_transitions = []
+        current_pa_transitions = pa_transitions[np.in1d(pa_transitions[:, 0], lineup_spot)]
+        current_non_pa_transitions = non_pa_transitions[np.in1d(non_pa_transitions[:, 0], lineup_spot)]
+        for start_state in range(0,num_start_states):
+            pa_row = [0] * num_end_states
+            non_pa_row = [0] * num_end_states
+            pa_for_start_state = current_pa_transitions[np.in1d(current_pa_transitions[:, 1], start_state)]
+            non_pa_for_start_state = current_non_pa_transitions[np.in1d(current_non_pa_transitions[:, 1], start_state)]
+            for row in pa_for_start_state:
+                pa_row[row[2]] = row[3]
+            final_pa_transitions.append(pa_row)
+            for row in non_pa_for_start_state:
+                non_pa_row[row[2]] = row[3]
+            final_non_pa_transitions.append(non_pa_row)
+        #print(final_pa_transitions)
+        constructed_lineup.append(LineupSpot(final_pa_transitions, final_non_pa_transitions))
+    return constructed_lineup
+
 print_box_score = False
 print_transitions = False
 print_transitions_count = False
-print_inning_number = True
+print_inning_number = False
 include_non_pa_transitions = True
-num_innings = 100000
+num_innings = 1000000
 total_runs = 0.0
 runs_each_inning = []
 innings = []
 
-non_pa_transitions_1 = np.loadtxt('..\\data\\non_pa_transitions_raw_ls_1.csv', delimiter=",")
+transitions_2013 = np.loadtxt('..\\data\\transitions_by_lineup_spot_2013.csv', delimiter=",", skiprows=1, dtype=int)
+non_pa_transitions_2013 = np.loadtxt('..\\data\\non_pa_transitions_by_lineup_spot_2013.csv', delimiter=",", skiprows=1, dtype=int)
 
-lineup_spots = []
-lineup_spots.append(LineupSpot(np.loadtxt('..\\data\\transitions_raw_ls_1.csv', delimiter=","),
-                               np.loadtxt('..\\data\\non_pa_transitions_raw_ls_1.csv', delimiter=",")))
-lineup_spots.append(LineupSpot(np.loadtxt('..\\data\\transitions_raw_ls_2.csv', delimiter=","),
-                               np.loadtxt('..\\data\\non_pa_transitions_raw_ls_2.csv', delimiter=",")))
-lineup_spots.append(LineupSpot(np.loadtxt('..\\data\\transitions_raw_ls_3.csv', delimiter=","),
-                               np.loadtxt('..\\data\\non_pa_transitions_raw_ls_3.csv', delimiter=",")))
-lineup_spots.append(LineupSpot(np.loadtxt('..\\data\\transitions_raw_ls_4.csv', delimiter=","),
-                               np.loadtxt('..\\data\\non_pa_transitions_raw_ls_4.csv', delimiter=",")))
-lineup_spots.append(LineupSpot(np.loadtxt('..\\data\\transitions_raw_ls_5.csv', delimiter=","),
-                               np.loadtxt('..\\data\\non_pa_transitions_raw_ls_5.csv', delimiter=",")))
-lineup_spots.append(LineupSpot(np.loadtxt('..\\data\\transitions_raw_ls_6.csv', delimiter=","),
-                               np.loadtxt('..\\data\\non_pa_transitions_raw_ls_6.csv', delimiter=",")))
-lineup_spots.append(LineupSpot(np.loadtxt('..\\data\\transitions_raw_ls_7.csv', delimiter=","),
-                               np.loadtxt('..\\data\\non_pa_transitions_raw_ls_7.csv', delimiter=",")))
-lineup_spots.append(LineupSpot(np.loadtxt('..\\data\\transitions_raw_ls_8.csv', delimiter=","),
-                               np.loadtxt('..\\data\\non_pa_transitions_raw_ls_8.csv', delimiter=",")))
-lineup_spots.append(LineupSpot(np.loadtxt('..\\data\\transitions_raw_ls_9.csv', delimiter=","),
-                               np.loadtxt('..\\data\\non_pa_transitions_raw_ls_9.csv', delimiter=",")))
-
-lineup = Lineup(lineup_spots)
+lineup = Lineup(make_lineup(transitions_2013, non_pa_transitions_2013))
 
 for curr_inning in range(1,num_innings+1):
     inning = Inning(lineup, print_transitions, include_non_pa_transitions=include_non_pa_transitions)
