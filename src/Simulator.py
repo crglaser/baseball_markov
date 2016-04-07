@@ -1,12 +1,13 @@
 import math
 import random
 import csv
-import pandas as pd
 import numpy as np
 
 
 transitions_made = {}
+outcome_count = {}
 base_states = ["000", "100", "020", "120", "003", "103", "023", "123"]
+lowest_occupied_base = ["HR", "1B", "2B", "1B", "3B", "1B", "2B", "1B"]
 runners = [0, 1, 1, 2, 1, 2, 2, 3]
 num_start_states = 24
 num_end_states = 28
@@ -42,6 +43,7 @@ class Node:
     def __init__(self, base_state_number, outs, transition_states, transition_states_non_pa):
         self.base_state_number = base_state_number
         self.base_state = base_states[base_state_number]
+        self.lowest_occupied_base = lowest_occupied_base[base_state_number]
         self.num_runners = runners[base_state_number]
         self.outs = outs
         self.transition_states = transition_states
@@ -136,12 +138,6 @@ class Inning:
 
         self.active_node = self.lineup.current_lineup_spot().nodes[next_row][next_col]
 
-        key = str(beginning_node.node_number()) + " " + str(self.active_node.node_number())
-        if transitions_made.has_key(key):
-            transitions_made[key] += 1
-        else:
-            transitions_made[key] = 1
-
         start_runners_and_outs = self.runners_and_outs(beginning_node)
         end_runners_and_outs = self.runners_and_outs(self.active_node)
 
@@ -151,10 +147,46 @@ class Inning:
         elif end_runners_and_outs < 1 + start_runners_and_outs:
             runs_scored = start_runners_and_outs + 1 - end_runners_and_outs
 
+
+        outs_made = self.active_node.outs - beginning_node.outs
+        #Otherwise tracks base_out states
+        track_base_states = True
+
+        key = self.create_key(beginning_node, self.active_node, outs_made, runs_scored, track_base_states)
+
+        #Track Outcomes
+        if outs_made == 0:
+            if outcome_count.has_key(self.active_node.lowest_occupied_base):
+                outcome_count[self.active_node.lowest_occupied_base] += 1
+            else:
+                outcome_count[self.active_node.lowest_occupied_base] = 1
+        elif outs_made == 2:
+            if outcome_count.has_key("GIDP"):
+                outcome_count["GIDP"] += 1
+            else:
+                outcome_count["GIDP"] = 1
+        elif outs_made == 3:
+            if outcome_count.has_key("GITP"):
+                outcome_count["GITP"] += 1
+            else:
+                outcome_count["GITP"] = 1
+
+
+        if transitions_made.has_key(key):
+            transitions_made[key] += 1
+        else:
+            transitions_made[key] = 1
+
         if do_print:
             self.active_node.print_node(at_bat_of_inning, runs_scored, lineup_spot=self.lineup.current_spot)
 
         return runs_scored + non_pa_runs
+
+    def create_key(self, start_node, end_node, outs_made, runs_scored, track_base_states = True):
+        start_state = start_node.base_state_number if track_base_states else start_node.node_number()
+        end_state = end_node.base_state_number if track_base_states else end_node.node_number()
+        key = "start_" + str(start_state) + "_end_" + str(end_state) + "_outs_" + str(outs_made) + "_runs_" + str(runs_scored)
+        return key
 
     def runners_and_outs(self, current_node):
         return current_node.outs + current_node.num_runners
@@ -264,12 +296,62 @@ def make_lineup(pa_transitions, non_pa_transitions):
         constructed_lineup.append(LineupSpot(final_pa_transitions, final_non_pa_transitions))
     return constructed_lineup
 
-print_box_score = False
-print_transitions = False
+def check_valid_home_game(total_runs):
+    num_1b = outcome_count["1B"] if outcome_count.has_key("1B") else 0
+    num_2b = outcome_count["2B"] if outcome_count.has_key("2B") else 0
+    num_3b = outcome_count["3B"] if outcome_count.has_key("3B") else 0
+    num_hr = outcome_count["HR"] if outcome_count.has_key("HR") else 0
+    num_hit_walk = num_1b + num_2b + num_3b + num_hr
+    num_gidp = outcome_count["GIDP"] if outcome_count.has_key("GIDP") else 0
+    num_gitp = outcome_count["GITP"] if outcome_count.has_key("GITP") else 0
+
+    if total_runs != 4:
+        return False
+    if num_1b < 6 | num_1b > 13:
+        return False
+    if num_2b < 1 | num_2b > 2:
+        return False
+    if num_3b > 1:
+        return False
+    if num_hit_walk < 9 | num_hit_walk > 16:
+        return False
+    if num_gidp > 2:
+        return False
+    if num_gitp > 0:
+        return False
+
+def check_valid_road_game(total_runs):
+    num_1b = outcome_count["1B"] if outcome_count.has_key("1B") else 0
+    num_2b = outcome_count["2B"] if outcome_count.has_key("2B") else 0
+    num_3b = outcome_count["3B"] if outcome_count.has_key("3B") else 0
+    num_hr = outcome_count["HR"] if outcome_count.has_key("HR") else 0
+    num_hit_walk = num_1b + num_2b + num_3b + num_hr
+    num_gidp = outcome_count["GIDP"] if outcome_count.has_key("GIDP") else 0
+    num_gitp = outcome_count["GITP"] if outcome_count.has_key("GITP") else 0
+
+    if total_runs != 3:
+        return False
+    if num_1b < 6 | num_1b > 12:
+        return False
+    if num_2b < 1 | num_2b > 2:
+        return False
+    if num_3b > 1:
+        return False
+    if num_hit_walk < 8 | num_hit_walk > 15:
+        return False
+    if num_gidp > 2:
+        return False
+    if num_gitp > 0:
+        return False
+
+
+print_box_score = True
+print_transitions = True
 print_transitions_count = False
+print_outcome_count = True
 print_inning_number = False
 include_non_pa_transitions = True
-num_innings = 1000000
+num_innings = 9
 total_runs = 0.0
 runs_each_inning = []
 innings = []
@@ -300,6 +382,19 @@ if print_transitions_count:
     for key in transitions_made:
         print(key, transitions_made[key])
 
+if print_outcome_count:
+    for key in outcome_count:
+        print(key, outcome_count[key])
+
+if check_valid_home_game(total_runs):
+    print("valid home game")
+else:
+    print("not valid home game")
+
+if check_valid_road_game(total_runs):
+    print("valid road game")
+else:
+    print("not valid road game")
 
 
 
