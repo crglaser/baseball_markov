@@ -115,6 +115,18 @@ class Inning:
         elif end_runners_and_outs < start_runners_and_outs:
             runs_scored = start_runners_and_outs - end_runners_and_outs
 
+        if beginning_node.node_number() != self.active_node.node_number():
+            if beginning_node.outs == self.active_node.outs:
+                if outcome_count.has_key("SB"):
+                    outcome_count["SB"] += 1
+                else:
+                    outcome_count["SB"] = 1
+            else:
+                if outcome_count.has_key("CS"):
+                    outcome_count["CS"] += 1
+                else:
+                    outcome_count["CS"] = 1
+
         if do_print and beginning_node.node_number() != self.active_node.node_number():
             self.active_node.print_node(at_bat_of_inning, runs_scored, lineup_spot=self.lineup.current_spot, non_pa_transition=True)
 
@@ -304,21 +316,39 @@ def check_valid_home_game(total_runs):
     num_hit_walk = num_1b + num_2b + num_3b + num_hr
     num_gidp = outcome_count["GIDP"] if outcome_count.has_key("GIDP") else 0
     num_gitp = outcome_count["GITP"] if outcome_count.has_key("GITP") else 0
+    num_sb = outcome_count["SB"] if outcome_count.has_key("SB") else 0
+    num_cs = outcome_count["CS"] if outcome_count.has_key("CS") else 0
+
+    print("Runs", total_runs, "1B", num_1b, "2B", num_2b, "3B", num_3b, "HR", num_hr, "Hit + walk", num_hit_walk, "GIDP", num_gidp, "GITP", num_gitp, "SB", num_sb, "CS", num_cs)
 
     if total_runs != 4:
         return False
-    if num_1b < 6 | num_1b > 13:
+
+    if num_1b < 6 or num_1b > 13:
         return False
-    if num_2b < 1 | num_2b > 2:
+
+    if num_2b < 1 or num_2b > 2:
         return False
+
     if num_3b > 1:
         return False
-    if num_hit_walk < 9 | num_hit_walk > 16:
+
+    if num_hr > 1:
         return False
+
+    if num_hit_walk < 9 or num_hit_walk > 16:
+        return False
+
     if num_gidp > 2:
         return False
+
     if num_gitp > 0:
         return False
+
+    if num_sb > 1:
+        return False
+
+    return True
 
 def check_valid_road_game(total_runs):
     num_1b = outcome_count["1B"] if outcome_count.has_key("1B") else 0
@@ -328,73 +358,98 @@ def check_valid_road_game(total_runs):
     num_hit_walk = num_1b + num_2b + num_3b + num_hr
     num_gidp = outcome_count["GIDP"] if outcome_count.has_key("GIDP") else 0
     num_gitp = outcome_count["GITP"] if outcome_count.has_key("GITP") else 0
+    num_sb = outcome_count["SB"] if outcome_count.has_key("SB") else 0
+    num_cs = outcome_count["CS"] if outcome_count.has_key("CS") else 0
+
+    print("Runs", total_runs, "1B", num_1b, "2B", num_2b, "3B", num_3b, "HR", num_hr, "Hit + walk", num_hit_walk, "GIDP", num_gidp, "GITP", num_gitp, "SB", num_sb, "CS", num_cs)
 
     if total_runs != 3:
         return False
-    if num_1b < 6 | num_1b > 12:
+
+    if num_1b < 6 or num_1b > 12:
         return False
-    if num_2b < 1 | num_2b > 2:
+
+    if num_2b < 1 or num_2b > 2:
         return False
+
     if num_3b > 1:
         return False
-    if num_hit_walk < 8 | num_hit_walk > 15:
+
+    if num_hr > 1:
         return False
+
+    if num_hit_walk < 8 or num_hit_walk > 15:
+        return False
+
     if num_gidp > 2:
         return False
+
     if num_gitp > 0:
         return False
 
+    if num_sb > 1:
+        return False
 
-print_box_score = True
+    return True
+
+
+print_box_score = False
 print_transitions = True
 print_transitions_count = False
 print_outcome_count = True
-print_inning_number = False
+print_inning_number = True
 include_non_pa_transitions = True
 num_innings = 9
-total_runs = 0.0
-runs_each_inning = []
-innings = []
 
 transitions_2013 = np.loadtxt('..\\data\\transitions_by_lineup_spot_2013.csv', delimiter=",", skiprows=1, dtype=int)
 non_pa_transitions_2013 = np.loadtxt('..\\data\\non_pa_transitions_by_lineup_spot_2013.csv', delimiter=",", skiprows=1, dtype=int)
 
 lineup = Lineup(make_lineup(transitions_2013, non_pa_transitions_2013))
 
-for curr_inning in range(1,num_innings+1):
-    inning = Inning(lineup, print_transitions, include_non_pa_transitions=include_non_pa_transitions)
-    if print_inning_number:
-        print("Inning #: ", curr_inning)
-    runs_this_inning = inning.simulate_inning()
-    total_runs += runs_this_inning
-    innings.append(curr_inning)
-    runs_each_inning.append(runs_this_inning)
+seeking_home_game = False
+seeking_away_game = not seeking_home_game
 
-innings.append("R")
-runs_each_inning.append(sum(runs_each_inning))
+num_sims = 1
 
-print("average runs ", total_runs/num_innings)
-if print_box_score:
-    print(innings)
-    print(runs_each_inning)
+while seeking_home_game or seeking_away_game:
+    print ("Simulation number ", num_sims)
+    outcome_count = {}
+    total_runs = 0.0
+    runs_each_inning = []
+    innings = []
 
-if print_transitions_count:
-    for key in transitions_made:
-        print(key, transitions_made[key])
+    for curr_inning in range(1,num_innings+1):
+        inning = Inning(lineup, print_transitions, include_non_pa_transitions=include_non_pa_transitions)
+        if print_inning_number:
+            print("Inning #: ", curr_inning)
+        runs_this_inning = inning.simulate_inning()
+        total_runs += runs_this_inning
+        innings.append(curr_inning)
+        runs_each_inning.append(runs_this_inning)
 
-if print_outcome_count:
-    for key in outcome_count:
-        print(key, outcome_count[key])
+    innings.append("R")
+    runs_each_inning.append(sum(runs_each_inning))
 
-if check_valid_home_game(total_runs):
-    print("valid home game")
-else:
-    print("not valid home game")
+    print("average runs ", total_runs/num_innings)
+    if print_box_score:
+        print(innings)
+        print(runs_each_inning)
 
-if check_valid_road_game(total_runs):
-    print("valid road game")
-else:
-    print("not valid road game")
+    if print_transitions_count:
+        for key in transitions_made:
+            print(key, transitions_made[key])
+
+    if print_outcome_count:
+        for key in outcome_count:
+            print(key, outcome_count[key])
+
+    if seeking_home_game:
+        seeking_home_game = not check_valid_home_game(total_runs)
+
+    if seeking_away_game:
+        seeking_away_game = not check_valid_road_game(total_runs)
+
+    num_sims +=1
 
 
 
