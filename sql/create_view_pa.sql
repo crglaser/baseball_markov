@@ -13,4 +13,4 @@ case when outs_ct + event_outs_ct = 3 then (event_runs_ct + 24)
 from retrosheet.events r_event
 join retrosheet.games r_games
 on r_event.game_id = r_games.game_id
-where r_event.event_cd not in (4,5,6,8,9,10,11,12,13,17);
+where r_event.event_cd not in (4,5,6,8,9,10,11,12,13);

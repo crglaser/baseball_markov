@@ -8,6 +8,11 @@ transitions_made = {}
 outcome_count = {}
 base_states = ["000", "100", "020", "120", "003", "103", "023", "123"]
 lowest_occupied_base = ["HR", "1B", "2B", "1B", "3B", "1B", "2B", "1B"]
+# P, C, 1B, 2B, 3B, SS, LF, CF, RF
+by_position_batting_order_1 = [9, 7, 4, 2, 6, 8, 5, 1, 3]
+by_position_batting_order_2 = [9, 7, 5, 2, 6, 8, 4, 1, 3]
+batting_order_positions_1 = [8, 4, 9, 3, 7, 5, 2, 6, 1]
+batting_order_positions_2 = [8, 4, 9, 7, 3, 5, 2, 6, 1]
 runners = [0, 1, 1, 2, 1, 2, 2, 3]
 num_start_states = 24
 num_end_states = 28
@@ -286,13 +291,17 @@ class LineupSpot:
         print(self.nodes[0][0].print_first_transition_state())
 
 
-def make_lineup(pa_transitions, non_pa_transitions):
+def make_lineup(pa_transitions, non_pa_transitions, by_batting_order = True):
+    #If by_batting_order is false, grab by position instead
     constructed_lineup = []
     for lineup_spot in range(1, num_lineup_spots+1):
         final_pa_transitions = []
         final_non_pa_transitions = []
-        current_pa_transitions = pa_transitions[np.in1d(pa_transitions[:, 0], lineup_spot)]
-        current_non_pa_transitions = non_pa_transitions[np.in1d(non_pa_transitions[:, 0], lineup_spot)]
+        spot_to_take = lineup_spot if by_batting_order else batting_order_positions_1[lineup_spot - 1]
+        print (lineup_spot, spot_to_take)
+        current_pa_transitions = pa_transitions[np.in1d(pa_transitions[:, 0], spot_to_take)]
+        print(current_pa_transitions)
+        current_non_pa_transitions = non_pa_transitions[np.in1d(non_pa_transitions[:, 0], spot_to_take)]
         for start_state in range(0,num_start_states):
             pa_row = [0] * num_end_states
             non_pa_row = [0] * num_end_states
@@ -392,27 +401,29 @@ def check_valid_road_game(total_runs):
 
     return True
 
-
+#if false file is by batter position
+file_by_batting_order = False
 print_box_score = False
 print_transitions = True
 print_transitions_count = False
 print_outcome_count = True
 print_inning_number = True
 include_non_pa_transitions = True
-num_innings = 9
+num_innings = 8
 
-transitions_2013 = np.loadtxt('..\\data\\transitions_by_lineup_spot_2013.csv', delimiter=",", skiprows=1, dtype=int)
-non_pa_transitions_2013 = np.loadtxt('..\\data\\non_pa_transitions_by_lineup_spot_2013.csv', delimiter=",", skiprows=1, dtype=int)
+transitions_by_batter_position = np.loadtxt('..\\data\\transitions_by_batter_position.csv', delimiter=",", skiprows=1, dtype=int)
+non_pa_transitions_by_batter_position = np.loadtxt('..\\data\\non_pa_transitions_by_batter_position.csv', delimiter=",", skiprows=1, dtype=int)
 
-lineup = Lineup(make_lineup(transitions_2013, non_pa_transitions_2013))
+lineup = Lineup(make_lineup(transitions_by_batter_position, non_pa_transitions_by_batter_position, by_batting_order=file_by_batting_order))
 
-seeking_home_game = False
+seeking_home_game = True
 seeking_away_game = not seeking_home_game
 
 num_sims = 1
 
 while seeking_home_game or seeking_away_game:
     print ("Simulation number ", num_sims)
+    lineup.current_spot = 0
     outcome_count = {}
     total_runs = 0.0
     runs_each_inning = []
